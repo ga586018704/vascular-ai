@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VASCULAR.AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 2px solid #e94560;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #e94560, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid #2d2d44;
+        }
+        .btn {
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        #fileInput { display: none; }
+        
+        .upload-area {
+            border: 2px dashed #2d2d44;
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover { border-color: #e94560; }
+        
+        .protocol-output {
+            background: #0f0f1a;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            border-left: 4px solid #e94560;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #2d2d44;
+            border-radius: 50%;
+            border-top-color: #e94560;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🫀 VASCULAR.AI</h1>
+        <p>AI-планировщик сосудистых операций</p>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <h2>📤 Загрузка исследования</h2>
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <p>Нажмите для загрузки DICOM</p>
+                <p style="color: #666; font-size: 0.9rem;">или перетащите файл сюда</p>
+            </div>
+            <input type="file" id="fileInput" accept=".dcm,.zip" onchange="handleFile(event)">
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <div class="card" id="operationCard" style="display: none;">
+            <h2>⚙️ Планирование операции</h2>
+            <select id="operationType" style="width: 100%; padding: 0.8rem; margin-bottom: 1rem; background: #0f0f1a; color: #fff; border: 1px solid #2d2d44; border-radius: 8px;">
+                <option value="">Выберите тип операции...</option>
+                <option value="aortic_aneurysm_resection">Резекция аневризмы аорты</option>
+                <option value="femoral_thrombectomy">Тромбэктомия из ОБА</option>
+                <option value="varicose_vein_surgery">Флебэктомия (варикоз)</option>
+            </select>
+            
+            <input type="text" id="accessPoint" placeholder="Точка доступа (например: правый скарповский треугольник)" 
+                   style="width: 100%; padding: 0.8rem; margin-bottom: 1rem; background: #0f0f1a; color: #fff; border: 1px solid #2d2d44; border-radius: 8px;">
+            
+            <select id="anesthesia" style="width: 100%; padding: 0.8rem; margin-bottom: 1rem; background: #0f0f1a; color: #fff; border: 1px solid #2d2d44; border-radius: 8px;">
+                <option value="эндотрахеальная">Эндотрахеальная анестезия</option>
+                <option value="спинномозговая">Спинномозговая анестезия</option>
+                <option value="местная">Местная анестезия</option>
+            </select>
+            
+            <button class="btn" onclick="createOperation()">Сгенерировать протокол</button>
+            <div id="protocolResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://vascular-ai-api.onrender.com'; // ЗАМЕНИ на свой URL после деплоя
+        let currentStudyId = null;
+
+        async function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const status = document.getElementById('uploadStatus');
+            status.innerHTML = '<div class="loading"></div> Загрузка...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch(`${API_URL}/upload-dicom`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                currentStudyId = data.study_id;
+                
+                status.innerHTML = `<p style="color: #4ade80;">✅ Загружено: ${data.metadata.filename}</p>`;
+                document.getElementById('operationCard').style.display = 'block';
+                
+            } catch (error) {
+                status.innerHTML = `<p style="color: #ef4444;">❌ Ошибка: ${error.message}</p>`;
+            }
+        }
+
+        async function createOperation() {
+            const type = document.getElementById('operationType').value;
+            const access = document.getElementById('accessPoint').value;
+            const anesthesia = document.getElementById('anesthesia').value;
+            
+            if (!type || !currentStudyId) {
+                alert('Выберите тип операции и загрузите исследование');
+                return;
+            }
+            
+            const result = document.getElementById('protocolResult');
+            result.innerHTML = '<div class="loading"></div> Генерация протокола...';
+            
+            try {
+                const params = new URLSearchParams({
+                    study_id: currentStudyId,
+                    operation_type: type,
+                    access_point: access,
+                    anesthesia: anesthesia
+                });
+                
+                const response = await fetch(`${API_URL}/create-operation?${params}`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <div class="protocol-output">
+                        <h3 style="margin-bottom: 1rem; color: #e94560;">Протокол операции #${data.operation_id.slice(0, 8)}</h3>
+                        ${data.protocol}
+                    </div>
+                `;
+                
+            } catch (error) {
+                result.innerHTML = `<p style="color: #ef4444;">❌ Ошибка: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
