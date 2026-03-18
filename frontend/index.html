@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VASCULAR.AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 2rem;
+            text-align: center;
+            border-bottom: 2px solid #e94560;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #e94560, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        .card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid #2d2d44;
+        }
+        .input-group {
+            margin-bottom: 1rem;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #a0a0a0;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 0.8rem;
+            background: #0f0f1a;
+            color: #fff;
+            border: 1px solid #2d2d44;
+            border-radius: 8px;
+        }
+        .btn {
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: transform 0.2s;
+            margin-right: 1rem;
+            margin-bottom: 1rem;
+        }
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary {
+            background: #2d2d44;
+        }
+        
+        #fileInput { display: none; }
+        
+        .upload-area {
+            border: 2px dashed #2d2d44;
+            border-radius: 12px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover { border-color: #e94560; }
+        
+        .protocol-output {
+            background: #0f0f1a;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            border-left: 4px solid #e94560;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #2d2d44;
+            border-radius: 50%;
+            border-top-color: #e94560;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        .status.success { background: #1a3a1a; color: #4ade80; }
+        .status.error { background: #3a1a1a; color: #ef4444; }
+        .status.info { background: #1a1a3a; color: #60a5fa; }
+        
+        .api-config {
+            background: #0f0f1a;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🫀 VASCULAR.AI</h1>
+        <p>AI-планировщик сосудистых операций v0.1.0</p>
+    </div>
+    
+    <div class="container">
+        <!-- API Configuration -->
+        <div class="card">
+            <h2>⚙️ Настройка API</h2>
+            <div class="api-config">
+                <div class="input-group">
+                    <label>URL сервера (Render):</label>
+                    <input type="text" id="apiUrl" placeholder="https://vascular-ai-api.onrender.com" 
+                           value="https://vascular-ai-api.onrender.com">
+                </div>
+                <button class="btn btn-secondary" onclick="testConnection()">Проверить соединение</button>
+                <div id="connectionStatus"></div>
+            </div>
+        </div>
+        
+        <!-- Upload -->
+        <div class="card">
+            <h2>📤 Загрузка исследования</h2>
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <p style="font-size: 2rem;">📁</p>
+                <p>Нажмите для загрузки DICOM</p>
+                <p style="color: #666; font-size: 0.9rem;">.dcm или .zip</p>
+            </div>
+            <input type="file" id="fileInput" accept=".dcm,.zip" onchange="handleFile(event)">
+            <div id="uploadStatus"></div>
+        </div>
+        
+        <!-- Operation Planning -->
+        <div class="card" id="operationCard" style="display: none;">
+            <h2>🔧 Планирование операции</h2>
+            
+            <div class="input-group">
+                <label>Тип операции:</label>
+                <select id="operationType">
+                    <option value="">Выберите...</option>
+                    <option value="aortic_aneurysm_resection">Резекция аневризмы брюшной аорты</option>
+                    <option value="femoral_thrombectomy">Тромбэктомия из общей бедренной артерии</option>
+                    <option value="varicose_vein_surgery">Флебэктомия (варикозная болезнь)</option>
+                    <option value="carotid_endarterectomy">Эндартерэктомия сонной артерии</option>
+                    <option value="subclavian_aneurysm_resection">Резекция аневризмы подключичной артерии</option>
+                </select>
+            </div>
+            
+            <div class="input-group">
+                <label>Точка доступа:</label>
+                <input type="text" id="accessPoint" placeholder="Например: правый скарповский треугольник">
+            </div>
+            
+            <div class="input-group">
+                <label>Анестезия:</label>
+                <select id="anesthesia">
+                    <option value="эндотрахеальная">Эндотрахеальная анестезия</option>
+                    <option value="спинномозговая">Спинномозговая анестезия</option>
+                    <option value="местная">Местная анестезия</option>
+                    <option value="общая">Общая анестезия</option>
+                </select>
+            </div>
+            
+            <button class="btn" onclick="createOperation()">Сгенерировать протокол</button>
+            <div id="protocolResult"></div>
+        </div>
+        
+        <!-- Operations List -->
+        <div class="card">
+            <h2>📋 История операций</h2>
+            <button class="btn btn-secondary" onclick="loadOperations()">Обновить список</button>
+            <div id="operationsList" style="margin-top: 1rem;"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentStudyId = null;
+        
+        function getApiUrl() {
+            return document.getElementById('apiUrl').value.trim() || 'https://vascular-ai-api.onrender.com';
+        }
+        
+        async function testConnection() {
+            const status = document.getElementById('connectionStatus');
+            status.innerHTML = '<div class="loading"></div> Проверка...';
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/`);
+                const data = await response.json();
+                status.innerHTML = `<div class="status success">✅ Подключено: ${data.message} (v${data.version})</div>`;
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        async function handleFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const status = document.getElementById('uploadStatus');
+            status.innerHTML = '<div class="loading"></div> Загрузка на сервер...';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/upload-dicom`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                currentStudyId = data.study_id;
+                
+                status.innerHTML = `
+                    <div class="status success">
+                        ✅ Исследование загружено<br>
+                        ID: ${data.study_id}<br>
+                        Размер: ${(data.metadata.size / 1024 / 1024).toFixed(2)} MB
+                    </div>
+                `;
+                document.getElementById('operationCard').style.display = 'block';
+                
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Ошибка загрузки: ${error.message}</div>`;
+            }
+        }
+        
+        async function createOperation() {
+            const type = document.getElementById('operationType').value;
+            const access = document.getElementById('accessPoint').value;
+            const anesthesia = document.getElementById('anesthesia').value;
+            
+            if (!type) {
+                alert('Выберите тип операции');
+                return;
+            }
+            if (!currentStudyId) {
+                alert('Сначала загрузите исследование');
+                return;
+            }
+            
+            const result = document.getElementById('protocolResult');
+            result.innerHTML = '<div class="loading"></div> Генерация протокола...';
+            
+            try {
+                const params = new URLSearchParams({
+                    study_id: currentStudyId,
+                    operation_type: type,
+                    access_point: access || 'стандартный',
+                    anesthesia: anesthesia
+                });
+                
+                const response = await fetch(`${getApiUrl()}/create-operation?${params}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <div class="protocol-output">
+                        <h3 style="margin-bottom: 1rem; color: #e94560;">
+                            📄 Протокол операции #${data.operation_id.slice(0, 8)}
+                        </h3>
+                        ${data.protocol}
+                        <hr style="border-color: #2d2d44; margin: 1rem 0;">
+                        <p style="color: #666; font-size: 0.9rem;">
+                            Статус: ${data.status} | 
+                            <a href="#" onclick="downloadProtocol('${data.operation_id}')" style="color: #e94560;">Скачать PDF</a>
+                        </p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                result.innerHTML = `<div class="status error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        async function loadOperations() {
+            const list = document.getElementById('operationsList');
+            list.innerHTML = '<div class="loading"></div> Загрузка...';
+            
+            try {
+                const response = await fetch(`${getApiUrl()}/operations`);
+                const data = await response.json();
+                
+                if (data.operations.length === 0) {
+                    list.innerHTML = '<p style="color: #666;">Нет сохранённых операций</p>';
+                    return;
+                }
+                
+                list.innerHTML = data.operations.map(op => `
+                    <div style="background: #0f0f1a; padding: 1rem; margin-bottom: 0.5rem; border-radius: 8px; border-left: 3px solid #e94560;">
+                        <strong>${op.operation_type}</strong> 
+                        <span style="color: #666; float: right;">${new Date(op.created_at).toLocaleString()}</span>
+                        <br>
+                        <span style="color: #888; font-size: 0.9rem;">ID: ${op.id.slice(0, 8)} | Статус: ${op.status}</span>
+                    </div>
+                `).join('');
+                
+            } catch (error) {
+                list.innerHTML = `<div class="status error">❌ Ошибка: ${error.message}</div>`;
+            }
+        }
+        
+        function downloadProtocol(operationId) {
+            alert('PDF генерация будет доступна в v0.2.0');
+        }
+        
+        // Автопроверка соединения при загрузке
+        window.onload = testConnection;
+    </script>
+</body>
+</html>
