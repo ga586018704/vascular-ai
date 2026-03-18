@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VASCULAR.AI</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        h1 {
+            background: linear-gradient(45deg, #e94560, #ff6b6b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .subtitle { color: #888; margin-bottom: 2rem; }
+        
+        .card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #2d2d44;
+        }
+        
+        input, select, button {
+            width: 100%;
+            padding: 0.8rem;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            border: 1px solid #2d2d44;
+            background: #0f0f1a;
+            color: #fff;
+            font-size: 1rem;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #e94560 0%, #ff6b6b 100%);
+            border: none;
+            cursor: pointer;
+        }
+        
+        button:disabled { opacity: 0.5; }
+        
+        .status {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        .success { background: #1a3a1a; color: #4ade80; }
+        .error { background: #3a1a1a; color: #ef4444; }
+        .info { background: #1a1a3a; color: #60a5fa; }
+        
+        pre {
+            background: #0f0f1a;
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            border-left: 3px solid #e94560;
+        }
+    </style>
+</head>
+<body>
+    <h1>🫀 VASCULAR.AI</h1>
+    <p class="subtitle">AI-планировщик сосудистых операций v0.1.0</p>
+    
+    <div class="card">
+        <h3>⚙️ Настройка API</h3>
+        <input type="text" id="apiUrl" value="https://vascular-ai-api.onrender.com" placeholder="URL API">
+        <button onclick="testApi()">Проверить соединение</button>
+        <div id="apiStatus"></div>
+    </div>
+    
+    <div class="card">
+        <h3>📤 Загрузка DICOM</h3>
+        <input type="file" id="dicomFile" accept=".dcm">
+        <button onclick="uploadFile()">Загрузить</button>
+        <div id="uploadStatus"></div>
+    </div>
+    
+    <div class="card" id="opCard" style="display:none;">
+        <h3>🔧 Планирование операции</h3>
+        <select id="opType">
+            <option value="">Выберите тип...</option>
+            <option value="aortic_aneurysm_resection">Резекция аневризмы аорты</option>
+            <option value="femoral_thrombectomy">Тромбэктомия ОБА</option>
+            <option value="varicose_vein_surgery">Флебэктомия</option>
+        </select>
+        <input type="text" id="accessPoint" placeholder="Точка доступа">
+        <select id="anesthesia">
+            <option value="эндотрахеальная">Эндотрахеальная</option>
+            <option value="спинномозговая">Спинномозговая</option>
+            <option value="местная">Местная</option>
+        </select>
+        <button onclick="createOperation()">Создать протокол</button>
+        <div id="protocolResult"></div>
+    </div>
+
+    <script>
+        let studyId = null;
+        const apiUrl = () => document.getElementById('apiUrl').value;
+        
+        async function testApi() {
+            const status = document.getElementById('apiStatus');
+            status.innerHTML = 'Проверка...';
+            try {
+                const res = await fetch(apiUrl() + '/');
+                const data = await res.json();
+                status.innerHTML = `<div class="status success">✅ ${data.message} v${data.version}</div>`;
+            } catch(e) {
+                status.innerHTML = `<div class="status error">❌ ${e.message}</div>`;
+            }
+        }
+        
+        async function uploadFile() {
+            const file = document.getElementById('dicomFile').files[0];
+            if(!file) return alert('Выберите файл');
+            
+            const status = document.getElementById('uploadStatus');
+            status.innerHTML = 'Загрузка...';
+            
+            const form = new FormData();
+            form.append('file', file);
+            
+            try {
+                const res = await fetch(apiUrl() + '/upload-dicom', {method:'POST', body:form});
+                const data = await res.json();
+                studyId = data.study_id;
+                status.innerHTML = `<div class="status success">✅ Загружено: ${data.study_id}</div>`;
+                document.getElementById('opCard').style.display = 'block';
+            } catch(e) {
+                status.innerHTML = `<div class="status error">❌ ${e.message}</div>`;
+            }
+        }
+        
+        async function createOperation() {
+            const type = document.getElementById('opType').value;
+            const access = document.getElementById('accessPoint').value;
+            const anesth = document.getElementById('anesthesia').value;
+            
+            if(!type || !studyId) return alert('Заполните все поля');
+            
+            const result = document.getElementById('protocolResult');
+            result.innerHTML = 'Создание...';
+            
+            const params = new URLSearchParams({study_id:studyId, operation_type:type, access_point:access, anesthesia:anesth});
+            
+            try {
+                const res = await fetch(apiUrl() + '/create-operation?' + params, {method:'POST'});
+                const data = await res.json();
+                result.innerHTML = `<pre>${data.protocol}</pre>`;
+            } catch(e) {
+                result.innerHTML = `<div class="status error">❌ ${e.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
